@@ -1,0 +1,24 @@
+{
+"Details":{
+  "ContactData":{
+    "Attributes":{},
+    "Channel": "VOICE",
+    "ContactId": "<CALL-ID>",
+    "CustomerEndpoint":{
+      "Address":"<CALLER-PHONE-NUMBER>",
+      "Type":"TELEPHONE-NUMBER"
+    },
+    "InitialContactId": "<CALL-ID>",
+    "InitiationMethod": "INBOUND",
+    "InstanceARN": "arn:aws:connect:<REGION>:<ACCOUNT-ID>:instance/<INSTANCE-ID>",
+    "PreviousContactId": "<CALL-ID>",
+    "Queue": null,
+    "SyystemEndpoint":{
+      "Address": "<CALLED-PHONE-NUMBER>",
+      "Type": "TELEPHONE-NUMBER"
+    }
+  },
+  "Parameters": {}
+},
+"Name": "ContactFlowEvent"
+}
