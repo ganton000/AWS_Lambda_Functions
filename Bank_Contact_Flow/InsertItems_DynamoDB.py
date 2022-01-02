@@ -5,12 +5,13 @@ import json
 
 ddb = boto3.resource('dynamodb')
 
-table = ddb.Table('BankAccounts')
+table = ddb.Table('BankAccounts3')
 
 
-Keys = ['BankAccountID', 'Zipcode', 'LastName', 'FirstName', 'AccountNumber', 'AccountType', 'AccountBalance', 'State', 'City', 'SSN']
+Keys = ['AccountNumber', 'Pin', 'Zipcode', 'LastName', 'FirstName', 'AccountType', 'AccountBalance', 'State', 'City', 'SSN']
 
-AccountID = [ random.randint(1000,9999) for _ in range(10)]
+#AccountID = [ random.randint(1000,9999) for _ in range(10)]
+Pins = [ random.randint(1000, 9999) for _ in range(10)]
 Last_Names = ['Doe', 'Lopez', 'Diaz', 'Williams', 'Chowdhury', 'Lee', 'Napoli', 'Mann', 'Omarion','Lorentz']
 First_Names = ['Maria', 'Larry', 'Joe', 'Thomas', 'Laura', 'Ayesha', 'Brian', 'Steven', 'Omar', 'Lorenzo']
 Zipcodes = [10043, 11239, 12345, 11239, 11132, 10002, 11111, 12322, 11212, 30050]
@@ -21,7 +22,7 @@ State = [ 'NY' for _ in range(9)] + ['MA']
 City = ['New York' for _ in range(9)] + ['Boston']
 SSN = [ random.randint(100000000,199999999) for _ in range(10)]
 
-Vals = [AccountID, Zipcodes, Last_Names, First_Names, AccountNumber, AccountType, AccountBalance, State, City, SSN]
+Vals = [AccountNumber, Pins, Zipcodes, Last_Names, First_Names, AccountType, AccountBalance, State, City, SSN]
 
 Items = [dict( (k, v[i]) for k,v in zip(Keys,Vals)) for i in range(10)]
 

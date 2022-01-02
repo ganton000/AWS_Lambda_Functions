@@ -16,22 +16,14 @@ def create_bank_accounts_table(table_name):
     TableName=table_name,
     KeySchema=[ #Key schema specifies attributes that make up primary key of table
         { 
-            'AttributeName': 'BankAccountID',
+            'AttributeName': 'AccountNumber',
             'KeyType':'HASH' #Partition Key
-        },
-        {
-            'AttributeName':'Zipcode',
-            'KeyType':'RANGE' #Sorts partition by sort key value 
         }
     ], 
     AttributeDefinitions=[ #Attributes for table keys
         { 
-            'AttributeName': 'BankAccountID',
+            'AttributeName': 'AccountNumber',
             'AttributeType': 'N'
-        },
-        {
-            'AttributeName':'Zipcode',
-            'AttributeType':'N'
         }
     ],
     ProvisionedThroughput={
@@ -46,7 +38,7 @@ def create_bank_accounts_table(table_name):
 
 ddb = boto3.resource('dynamodb')
 
-table_name = 'BankAccount'
+table_name = 'BankAccounts3'
 try:
     bank_table = create_bank_accounts_table(table_name)
     print('Created Table', table_name)
