@@ -63,22 +63,22 @@ def close(session_attributes, fulfillment_state, message):
         }
     }
 
-def delegate(session_attributes, slots):
-    '''
-    Directs Amazon Lex to choose the next course of action based on the bot configuration. 
-    If the response does not include any session attributes Amazon Lex retains the existing attributes. 
-    If you want a slot value to be null, you don't need to include the slot field in the request
-    You will get a DependencyFailedException exception if your fulfillment function 
-    returns the Delegate dialog action without removing any slots.
-    '''
+# def delegate(session_attributes, slots):
+#     '''
+#     Directs Amazon Lex to choose the next course of action based on the bot configuration. 
+#     If the response does not include any session attributes Amazon Lex retains the existing attributes. 
+#     If you want a slot value to be null, you don't need to include the slot field in the request
+#     You will get a DependencyFailedException exception if your fulfillment function 
+#     returns the Delegate dialog action without removing any slots.
+#     '''
 
-    return {
-        'sessionAttributes': session_attributes,
-        'dialogAction': {
-            'type': 'Delegate',
-            'slots': slots
-        }
-    }
+#     return {
+#         'sessionAttributes': session_attributes,
+#         'dialogAction': {
+#             'type': 'Delegate',
+#             'slots': slots
+#         }
+#     }
 
 def build_validation_result(is_valid, violated_slot, message_content):
 
@@ -311,8 +311,6 @@ def retrieve_balance(intent_request):
     output_session_attributes = intent_request['sessionAttributes'] if intent_request['sessionAttributes'] is not None else {}
 
     #validation of account number
-
-
     if accountNumber != query(accountNumber, 'AccountNumber'):
         slots = intent_request['currentIntent']['slots']
         validation_result = build_validation_result(False, 'AccountNumber', 'The account number {} does not exist in our database.'.format(accountNumber))
