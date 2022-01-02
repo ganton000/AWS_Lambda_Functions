@@ -12,7 +12,9 @@ import json
 import boto3 
 import logging
 import random
-import math
+#import math
+import os
+import time
 
 
 
@@ -149,6 +151,7 @@ def validate_replace_card_information(firstName, lastName, pin):
 def query(AccountNumber, query_params):
 
     from botocore.exceptions import ClientError
+    from boto3.dynamodb.conditions import Key
 
     #Initialize DynamoDB Client
     ddb = boto3.resource('dynamodb')
@@ -169,6 +172,7 @@ def query(AccountNumber, query_params):
 def update_accountNumber(accountNumber, new_accountNumber):
 
     from botocore.exceptions import ClientError
+    from boto3.dynamodb.conditions import Key
 
     ddb = boto3.resource('dynamodb')
 
@@ -178,8 +182,9 @@ def update_accountNumber(accountNumber, new_accountNumber):
         response = table.update_item(Key={
             'AccountNumber': accountNumber 
             },
-            UpdateExpression="set info.AccountNumber",
-            ExpressionAttributeValues={new_accountNumber}
+            UpdateExpression="set AccountNumber = :g",
+            ExpressionAttributeValues={':g':new_accountNumber},
+            ReturnValues="UPDATED_NEW"
             )
 
     except ClientError as e:
@@ -199,10 +204,12 @@ def replace_card(intent_request):
 
     accountNumber = int(intent_request['inputTranscript'])
 
+    #validate accountNumber
+
     #Initialize slot information
-    firstName = intent_request['currentIntent']['slots']['FirstName']
-    lastName = intent_request['currentIntent']['slots']['LastName']
-    pin = intent_request['currentIntent']['slots']['Pin']
+    firstName = try_ex(lambda: intent_request['currentIntent']['slots']['FirstName'])
+    lastName = try_ex(lambda: intent_request['currentIntent']['slots']['LastName'])
+    pin = try_ex(lambda: intent_request['currentIntent']['slots']['Pin'])
 
 
     source = intent_request['invocationSource']
@@ -229,6 +236,16 @@ def replace_card(intent_request):
             )
 
         #Perform identity validation on supplied input slots with database
+
+        if accountNumber != query(accountNumber, 'AccountNumber'):
+            validation_result = build_validation_result(False, 'AccountNumber', 'The account number {} does not exist in our database.'.format(accountNumber))
+            return elicit_slot(
+                output_session_attributes,
+                intent_request['currentIntent']['name'],
+                slots,
+                validation_result['violatedSlot'],
+                validation_result['message']
+            )
 
         if firstName != query(accountNumber, 'FirstName'):
             validation_result = build_validation_result(False, 'FirstName', 'The first name {} does not exist in our database.'.format(firstName))
@@ -283,20 +300,40 @@ def replace_card(intent_request):
 
 
 
-    response = table.put_item( Key={
-            'pass':passed
-        })
 
-    print('dynamodb response: ' + json.dumps(response))
-
-
-
-
-def retrieve_inquiry(intent_request):
+def retrieve_balance(intent_request):
     '''
     Performs dialog management and fulfillment for account lookup.
     '''
-    pass
+
+    accountNumber = int(intent_request['inputTranscript'])
+
+    output_session_attributes = intent_request['sessionAttributes'] if intent_request['sessionAttributes'] is not None else {}
+
+    #validation of account number
+
+
+    if accountNumber != query(accountNumber, 'AccountNumber'):
+        slots = intent_request['currentIntent']['slots']
+        validation_result = build_validation_result(False, 'AccountNumber', 'The account number {} does not exist in our database.'.format(accountNumber))
+        return elicit_slot(
+            output_session_attributes,
+            intent_request['currentIntent']['name'],
+            slots,
+            validation_result['violatedSlot'],
+            validation_result['message']
+            )
+
+    balance = query(accountNumber, 'AccountBalance')
+
+    return close(
+        output_session_attributes,
+        'Fulfilled',
+        {
+            'contentType':'PlainText',
+            'content': 'Your debit card balance is ${:,.2f}.'.format(balance)
+        }
+    )
 
 
 """ --- Intents --- """
@@ -313,13 +350,13 @@ def dispatch(intent_request):
     #Dispatch to your bot's intent handlers
 
     if intent_name == 'AccountLookUp':
-        return retrieve_inquiry(intent_request)
+        return retrieve_balance(intent_request)
     
     elif intent_name == 'ReplaceCard':
         return replace_card(intent_request)
     
     else:
-        raise Exception('Intent with name ' + intent_name + ' not supported'
+        raise Exception('Intent with name ' + intent_name + ' not supported')
 
 
 
