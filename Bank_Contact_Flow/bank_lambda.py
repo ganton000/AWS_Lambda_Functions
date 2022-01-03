@@ -228,7 +228,7 @@ def query(accountNumber, query_params):
     accountNumber = Decimal(accountNumber)
 
     #DynamoDB table
-    table = dynamodb.Table('BankAccounts3')
+    table = dynamodb.Table('BankAccounts')
 
     try:
         response = table.get_item(Key={
@@ -252,18 +252,18 @@ def update_accountNumber(accountNumber):
     import random
     
     accountNumber = Decimal(accountNumber)
-    new_accountNumber = Decimal(random.randint(100000000000, 999999999999))
+    new_checkaccountNumber = Decimal(random.randint(1000000000000000, 9999999999999999))
 
     #DDB Table
-    table = dynamodb.Table('BankAccounts3')
+    table = dynamodb.Table('BankAccounts')
 
     try:
         response = table.update_item(Key={
             'AccountNumber': accountNumber 
             },
-            UpdateExpression="set AccountNumber = :g",
+            UpdateExpression="set CheckingAccountNumber = :g",
             #ExpressionAttributeNames={'AccountNumber': accountNumber},
-            ExpressionAttributeValues={':g':new_accountNumber},
+            ExpressionAttributeValues={':g':new_checkaccountNumber},
             ReturnValues="UPDATED_NEW"
             )
 
@@ -275,7 +275,7 @@ def update_accountNumber(accountNumber):
         
     res = response['Item']['AccountNumber']
 
-    if new_accountNumber != res:
+    if new_checkaccountNumber != res:
         return False
     else:
         return response['Item']['AccountNumber']
@@ -373,7 +373,7 @@ def replace_card(intent_request):
     #Validating User Data
     if source == 'DialogCodeHook':
         validation_result = validate_replace_card_information(accountNumber, pin, firstName, lastName)
-        logger.debug(validation_result)
+        logger.info(validation_result)
         if not validation_result['isValid']:
             slots[validation_result['violatedSlot']] == None
             return elicit_slot( #reprompts user to enter data
@@ -408,12 +408,12 @@ def replace_card(intent_request):
             )
 
 
-    new_accountNumber = update_accountNumber(accountNumber)
+    new_checkaccountNumber = update_accountNumber(accountNumber)
 
-    if not new_accountNumber:
+    if not new_checkaccountNumber:
         raise Exception('Error generating new debit card number')
 
-    new_accountNumber = str(new_accountNumber)
+    new_accountNumber = str(new_checkaccountNumber)
     
     return close(
         output_session_attributes,

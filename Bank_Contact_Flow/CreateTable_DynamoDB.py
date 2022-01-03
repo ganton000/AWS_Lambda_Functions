@@ -38,7 +38,7 @@ def create_bank_accounts_table(table_name):
 
 ddb = boto3.resource('dynamodb')
 
-table_name = 'BankAccounts3'
+table_name = 'BankAccounts'
 try:
     bank_table = create_bank_accounts_table(table_name)
     print('Created Table', table_name)
