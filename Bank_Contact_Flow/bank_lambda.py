@@ -5,7 +5,6 @@ import logging
 import os
 from decimal import Decimal
 
-from boto3 import session
 
 
 #Configure Logger
@@ -15,8 +14,6 @@ logger.setLevel(logging.DEBUG)
 
 #Initialize DynamoDB Client
 dynamodb = boto3.resource('dynamodb')
-TABLE_NAME = 'BankAccounts3'
-
 
 
 
@@ -223,17 +220,12 @@ def try_ex(func):
 def query(accountNumber, query_params):
 
     from botocore.exceptions import ClientError
-    from decimal import Decimal
-    
-    accountNumber = Decimal(accountNumber)
 
     #DynamoDB table
     table = dynamodb.Table('BankAccounts')
 
     try:
-        response = table.get_item(Key={
-            'AccountNumber': accountNumber 
-            })
+        response = table.get_item(Key={'AccountNumber': Decimal(accountNumber)})
     except ClientError as err:
         if err.response['Error']['Code'] == 'InternalError':
             logger.info('Error Message: {}'.format(err.response['Error']['Message']))
@@ -245,22 +237,19 @@ def query(accountNumber, query_params):
 
 
 
+
 def update_accountNumber(accountNumber):
 
     from botocore.exceptions import ClientError
-    from decimal import Decimal
     import random
     
-    accountNumber = Decimal(accountNumber)
     new_checkaccountNumber = Decimal(random.randint(1000000000000000, 9999999999999999))
 
     #DDB Table
     table = dynamodb.Table('BankAccounts')
 
     try:
-        response = table.update_item(Key={
-            'AccountNumber': accountNumber 
-            },
+        response = table.update_item(Key={'AccountNumber': Decimal(accountNumber)},
             UpdateExpression="set CheckingAccountNumber = :g",
             #ExpressionAttributeNames={'AccountNumber': accountNumber},
             ExpressionAttributeValues={':g':new_checkaccountNumber},
@@ -273,12 +262,12 @@ def update_accountNumber(accountNumber):
         else:
             raise err
         
-    res = response['Item']['CheckingAccountNumber']
+    res = response['Attributes']['CheckingAccountNumber']
 
     if new_checkaccountNumber != res:
         return False
     else:
-        return response['Item']['AccountNumber']
+        return res
 
 
 
@@ -326,7 +315,7 @@ def retrieve_balance(intent_request):
 
     #Validation of Input Data with Database Values
     for slot_name, slot_val in slots.items():
-        if not (slot_val != query(accountNumber, slot_name)):
+        if (slot_val != query(accountNumber, slot_name)):
             res = query(accountNumber, slot_name)
             logger.info('slot_val={}, query_res={}'.format(slot_val, res))
             validation_result = build_validation_result(False, slot_name, f'The {slot_name} {slot_val} does not exist in our database.')
@@ -414,13 +403,19 @@ def replace_card(intent_request):
         raise Exception('Error generating new debit card number')
 
     new_accountNumber = str(new_checkaccountNumber)
+    street_address = query(accountNumber, 'StreetAddress')
+    email_address = query(accountNumber, 'Email Address')
+
+    message = f'An email has been sent to {email_address} containing your new debit card information. ' 
+    message2 = f'Your new debit card ending in {new_accountNumber[-4:]} has been mailed out to {street_address}. '
+    message3 = 'Please expect it to arrive within five to seven business days.'
     
     return close(
         output_session_attributes,
         'Fulfilled',
         {
             'contentType':'PlainText',
-            'content': f'Your new debit card ending in {new_accountNumber[-4:]} has been mailed out to your current address. Please expect it to arrive within five to seven business days.'
+            'content': message+message2+message3
         }
     )
 
