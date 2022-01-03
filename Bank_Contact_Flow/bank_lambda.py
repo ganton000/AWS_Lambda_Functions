@@ -273,7 +273,7 @@ def update_accountNumber(accountNumber):
         else:
             raise err
         
-    res = response['Item']['AccountNumber']
+    res = response['Item']['CheckingAccountNumber']
 
     if new_checkaccountNumber != res:
         return False
