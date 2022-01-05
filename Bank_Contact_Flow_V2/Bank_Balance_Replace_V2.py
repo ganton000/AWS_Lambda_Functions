@@ -16,7 +16,6 @@ dyn_resource = boto3.resource('dynamodb')
 tbl_name = 'BankAccountsNew'
 
 
-
 """ --- Generic functions used to simplify interaction with Amazon Lex --- """
 
 def get_slots(intent_request):
@@ -171,7 +170,7 @@ def isValid_Word(word):
 
 def isValid_Pin(pin):
     
-    if pin:
+    if pin is not None:
         try:
             pin = str(pin)
             if (pin.isnumeric() == 1) & (len(pin) == 4): 
@@ -183,7 +182,7 @@ def isValid_Pin(pin):
 
 def isValid_AccountNumber(accountNumber):
 
-    if accountNumber:
+    if accountNumber is not None:
         try:
             accountNumber = str(accountNumber)
             if (len(accountNumber) == 12) & (accountNumber.isnumeric() == 1):
@@ -196,7 +195,7 @@ def isValid_AccountNumber(accountNumber):
 
 def isValid_AccountType(accountType):
 
-    if accountType & (accountType in ['Checking', 'Savings']):
+    if accountType is not None & (accountType.lower() in ['checking', 'savings', 'checkings','saving']):
         return True
     
     return False
@@ -241,7 +240,7 @@ def get_item_dynamodb(table_name, accountNumber, query_params):
 
     try:
         response = table.get_item(Key={
-            'AccountNumber': accountNumber
+            'AccountNumber': Decimal(accountNumber)
         })['Item']
     except KeyError:
         return False
@@ -273,7 +272,7 @@ def validate_account_dynamodb(table_name, accountNumber):
 
     try:
         response = table.get_item(Key={
-            'AccountNumber': accountNumber
+            'AccountNumber': Decimal(accountNumber)
         })['Item']
     except KeyError:
         return False
@@ -305,7 +304,7 @@ def CheckBalance(intent_request):
 
 
     #dynamodb table name
-    table_name = tbl_name
+    table_name = 'BankAccountsNew'
 
     #Initialize required response parameters
     intent_name = intent_request['sessionState']['intent']['name']
@@ -313,6 +312,11 @@ def CheckBalance(intent_request):
     slots = get_slots(intent_request)
 
     logger.info(f'slots={slots}')
+    
+    #text = 'Thank you for choosing National Bank. Please tell us for which account would you like your balance?'
+    #elicit_slot(intent_request, intent_name, slots, 'None', session_attributes, text)
+    #delegate(intent_request, session_attributes)
+    
 
 
     #Get slot values
@@ -321,6 +325,7 @@ def CheckBalance(intent_request):
     pin = get_slot(intent_request, 'pin')
 
     logger.info(f'accountType={accountType}, accountNumber={accountNumber}, pin={pin}')
+    
 
     source = intent_request['invocationSource']
 
@@ -329,6 +334,7 @@ def CheckBalance(intent_request):
         logger.info(f'validation_result={validation_result}')
         if not validation_result['isValid']:
             slots[validation_result['violatedSlot']] == None
+            logger.info('violatedSlot={}, message={}'.format(validation_result['violatedSlot'], validation_result['message']))
             return elicit_slot(
                 intent_request,
                 intent_name,
@@ -343,7 +349,9 @@ def CheckBalance(intent_request):
 
 
     #Validation of user data with database values
-    if accountNumber != validate_account_dynamodb(table_name, accountNumber):
+    num_to_validate = get_item_dynamodb(table_name, accountNumber, 'AccountNumber')
+    if not (accountNumber == num_to_validate):
+        logger.info(f'accountNumber input={accountNumber}, acct_num_to_validate={num_to_validate}')
         validation_result = build_validation_result(False, 'accountNumber', f'The account number {accountNumber} does not exist in our database. Goodbye')
         fulfillment_state = 'Failed'
         return close(
@@ -352,7 +360,9 @@ def CheckBalance(intent_request):
             fulfillment_state,
             validation_result['message']
             )
-    if pin != get_item_dynamodb(table_name, accountNumber, 'Pin'):
+    num_to_validate = get_item_dynamodb(table_name, accountNumber, 'Pin')
+    if not (pin == num_to_validate):
+        logger.info(f'pin number input={pin}, pin_to_validate={num_to_validate}')
         validation_result = build_validation_result(False, 'pin', f'The pin number {pin} does not exist in our database. Goodbye.')
         fulfillment_state = 'Failed'
         return close(
@@ -375,26 +385,18 @@ def CheckBalance(intent_request):
         'content': output_response
     }
     fulfillment_state = 'Fulfilled'
+    
+    logger.info(f'fulfillment_state={fulfillment_state}')
 
     return close(intent_request, session_attributes, fulfillment_state, message)
 
 
 def FollowupCheckBalance(intent_request):
+    pass
 
-    output_response = ''
-    message = {
-        'contentType':'PlainText',
-        'content': output_response
-    }
 
 def ReplaceCard(intent_request):
-
-    output_response = ''
-    message = {
-        'contentType':'PlainText',
-        'content': output_response
-    }
-
+    pass
 
 
 
@@ -404,7 +406,8 @@ def ReplaceCard(intent_request):
 def dispatch(intent_request):
 
     intent_name = intent_request['sessionState']['intent']['name']
-
+    
+    logger.info(f'intent_name={intent_name}')
     
 
     #Dispatch to bot's intent handlers
@@ -428,7 +431,7 @@ def lambda_handler(event, context):
 
     bot_name = event['bot']['name']
     userMessage = event['inputTranscript'] #string
-    inputType = event['inputmode'] #DTMF | Speech | Text
+    inputType = event['inputMode'] #DTMF | Speech | Text
     
 
     logger.info(f'event.bot.name={bot_name}, userMessage={userMessage}, inputType={inputType}')
