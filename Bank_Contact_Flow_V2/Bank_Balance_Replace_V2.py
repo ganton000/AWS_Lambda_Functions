@@ -41,8 +41,8 @@ def get_session_attributes(intent_request):
 
 def close(intent_name, session_attributes, fulfillment_state, message):
     '''Closes/Ends current Lex session with customer'''
-
-    response = {
+    
+    return {
         'sessionState':{
             'sessionAttributes': session_attributes,
             'dialogAction':{
@@ -52,7 +52,9 @@ def close(intent_name, session_attributes, fulfillment_state, message):
                 'name': intent_name,
                 'state': fulfillment_state
             },
-        'messages': [message]
+            'messages': [
+                message
+                ]
         }
     }
     
@@ -364,19 +366,13 @@ def CheckBalance(intent_request):
     balance = get_item_dynamodb(table_name, accountNumber['value']['interpretedValue'], 'Account Balance')
     logger.info(f'balance={balance}')
 
-    output1 = 'The balance on your {} account is ${:,.2f} dollars. '.format(accountType['value']['interpretedValue'],balance)
+    output1 = f'The balance on your account is ${balance:,.2f} dollars. '
     output2 = 'Thank you for banking with Example Bank. We appreciate your business. '
     output3= 'Please stay on the line if you would like to take out customer experience survey.'
     output = output1+output2+output3
-    message = {
-        'contentType':'PlainText',
-        'content': output
-    }
     fulfillment_state = 'Fulfilled'
     
-    logger.info(f'fulfillment_state={fulfillment_state}')
-    
-    return close(intent_name, session_attributes, fulfillment_state, message)
+    return close(intent_name, session_attributes, fulfillment_state, output)
 
 
 def FollowupCheckBalance(intent_request):
