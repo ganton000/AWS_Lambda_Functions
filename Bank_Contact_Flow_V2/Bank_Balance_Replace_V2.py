@@ -1,4 +1,4 @@
-# import json
+import json
 import os
 import time
 import boto3
@@ -41,24 +41,26 @@ def get_session_attributes(intent_request):
 
 def close(intent_name, session_attributes, fulfillment_state, message):
     '''Closes/Ends current Lex session with customer'''
-    
-    return {
-        'sessionState':{
-            'sessionAttributes': session_attributes,
-            'dialogAction':{
-                'type':'Close'
+
+    response = {
+        'messages': [
+            message
+        ],
+        'sessionState': {
+            'dialogAction': {
+                'type': 'Close'           
             },
+            'sessionAttributes': session_attributes,
             'intent': {
+                'confirmationState': 'Confirmed',
                 'name': intent_name,
                 'state': fulfillment_state
-            },
-            'messages': [
-                message
-                ]
+            }
         }
     }
-    
+
     return response
+    
 
 
 def elicit_intent(session_attributes, message):
@@ -133,11 +135,7 @@ def delegate(intent_name, slots, session_attributes):
 ''' --- Validation Functions --- '''
 
 def build_validation_result(is_valid, violated_slot, message_content):
-    if message_content is None:
-        return {
-            'isValid': is_valid,
-            'violatedSlot': violated_slot
-        }
+
     return {
         'isValid': is_valid,
         'violatedSlot': violated_slot,
@@ -209,7 +207,7 @@ def validate_balance_information(slots):
         return build_validation_result(
             False,
             'accountType',
-            'Sorry I did not understand. Would you like to get the account balance for your Checking or Savngs account?'
+            'Sorry I did not understand. Would you like to get the account balance for your Checking account or your Savings account?'
         )
     
     if accountNumber:
@@ -217,7 +215,7 @@ def validate_balance_information(slots):
             return build_validation_result(
                 False,
                 'accountNumber',
-                f'Sorry I did not understand. Please enter your twelve digit {accountType} account number'
+                'Sorry I did not understand. Please enter your twelve digit {} account number'.format(accountType['value']['interpretedValue'])
             )
         if not validate_account_dynamodb(table_name, accountNumber['value']['interpretedValue']):
             return build_validation_result(
@@ -228,17 +226,18 @@ def validate_balance_information(slots):
     
     if pin:
         user_pin = pin['value']['interpretedValue']
+        logger.info(f'pin={pin} and user_pin={user_pin}')
         if not isValid_Pin(user_pin):
             return build_validation_result(
                 False,
                 'pin',
-                'Sorry I did not understand. Please enter your four digit pin number.'
+                'Sorry this is not a valid pin. Please enter your four digit pin number.'
             )
-        if user_pin != get_item_dynamodb(table_name, accountNumber, 'Pin'):
+        if Decimal(user_pin) != get_item_dynamodb(table_name, accountNumber['value']['interpretedValue'], 'Pin'):
             return build_validation_result(
                 False,
                 'pin',
-                f'Sorry but the pin number {user_pin} is incorrect. Please enter your four digit pin number'
+                'The pin number entered is incorrect. Please enter your four digit pin number.'
             )
     
     return {'isValid':True}
@@ -303,7 +302,6 @@ def try_ex(func):
     """
     Call passed in function in try block. If KeyError is encountered return None.
     This function is intended to be used to safely access dictionary.
-
     Note that this function would have negative impact on performance.
     """
 
@@ -347,9 +345,9 @@ def CheckBalance(intent_request):
     if source == 'DialogCodeHook':
         # Valdiate any slots which have been specified. If any are invalid, re-elicit for their value.
         validation_result = validate_balance_information(slots)
-        logger.info(f'validation_result={validation_result}')
+        logger.info('validation_result is {} for the non-empty slots in {}'.format(validation_result['isValid'],slots))
         if not validation_result['isValid']:
-            slots[validation_result['violatedSlot']] == None
+            slots[validation_result['violatedSlot']] = None
             logger.debug(f'slots={slots}')
             logger.info('violatedSlot={}, message={}'.format(validation_result['violatedSlot'], validation_result['message']))
             return elicit_slot(
@@ -368,11 +366,13 @@ def CheckBalance(intent_request):
 
     output1 = f'The balance on your account is ${balance:,.2f} dollars. '
     output2 = 'Thank you for banking with Example Bank. We appreciate your business. '
-    output3= 'Please stay on the line if you would like to take out customer experience survey.'
+    output3= 'Please stay on the line if you would like to take our customer experience survey.'
     output = output1+output2+output3
     fulfillment_state = 'Fulfilled'
+
+    message = {'contentType':'PlainText', 'content':output}
     
-    return close(intent_name, session_attributes, fulfillment_state, output)
+    return close(intent_name, session_attributes, fulfillment_state, message)
 
 
 def FollowupCheckBalance(intent_request):
