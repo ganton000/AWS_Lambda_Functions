@@ -1,20 +1,3 @@
-import json
-import os
-import time
-import boto3
-import logging
-from decimal import Decimal
-
-
-#Configure logger
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
-
-#Initialize DynamoDB resource
-dyn_resource = boto3.resource('dynamodb')
-tbl_name = 'BankAccountsNew'
-
 # import json
 import os
 import time
