@@ -15,6 +15,23 @@ logger.setLevel(logging.DEBUG)
 dyn_resource = boto3.resource('dynamodb')
 tbl_name = 'BankAccountsNew'
 
+# import json
+import os
+import time
+import boto3
+import logging
+from decimal import Decimal
+
+
+#Configure logger
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+
+#Initialize DynamoDB resource
+dyn_resource = boto3.resource('dynamodb')
+tbl_name = 'BankAccountsNew'
+
 
 """ --- Generic functions used to simplify interaction with Amazon Lex --- """
 
@@ -22,12 +39,12 @@ def get_slots(intent_request):
     return intent_request['sessionState']['intent']['slots']
 
 
-def get_slot(intent_request, slotName):
-    slots = try_ex(lambda: get_slots(intent_request))
-    if slots is not None and slotName in slots and slots[slotName] is not None:
-        return slots[slotName]['value']['interpretedValue']
-    else:
-        return None 
+# def get_slot(intent_request, slotName):
+#     slots = try_ex(lambda: get_slots(intent_request))
+#     if slots is not None and slotName in slots and slots[slotName] is not None:
+#         return slots[slotName]['value']['interpretedValue']
+#     else:
+#         return None 
 
 
 def get_session_attributes(intent_request):
@@ -39,24 +56,27 @@ def get_session_attributes(intent_request):
 
 
 
-def close(intent_request, session_attributes, fulfillment_state, message):
+def close(intent_name, session_attributes, fulfillment_state, message):
     '''Closes/Ends current Lex session with customer'''
 
-    intent_request['sessionState']['intent']['state'] = fulfillment_state
-    return {
+    response = {
         'sessionState':{
             'sessionAttributes': session_attributes,
             'dialogAction':{
                 'type':'Close'
             },
-            'intent': intent_request['sessionState']['intent']
-        },
-        'messages': [message],
-        'sessionId': intent_request['sessionId'],
-        'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
+            'intent': {
+                'name': intent_name,
+                'state': fulfillment_state
+            },
+        'messages': [message]
+        }
     }
+    
+    return response
 
-def elicit_intent(intent_request, session_attributes, message):
+
+def elicit_intent(session_attributes, message):
     '''Informs Amazon Lex that the user is expected to respond with an utterance that includes an intent. '''
     
     return {
@@ -66,25 +86,30 @@ def elicit_intent(intent_request, session_attributes, message):
             },
             'sessionAttributes': session_attributes
         },
-        'messages': [message] if message != None else None,
-        'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
+        'messages': [message] if message != None else None
     }
 
-def confirm_intent(intent_request, session_attributes, message):
+
+def confirm_intent(session_attributes, intent_name, slots, message):
     '''Informs Amazon Lex that the user is expected to give a yes or no answer to confirm or deny the current intent'''
     return {
-        'sessionState':{
-            'dialogAction':{
-                'type':'ConfirmIntent'
+        'messages': [
+            message
+        ],
+        'sessionState': {
+            'sessionAttributes': session_attributes,
+            'dialogAction': {
+                'type': 'ConfirmIntent'
             },
-            'sessionAttributes': session_attributes
-        },
-        'messages': [message] if message != None else None,
-        'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
+            'intent': {
+                'name': intent_name,
+                'slots': slots
+            }
+        }
     }
 
 
-def elicit_slot(intent_request, intent_name, slots, violated_slot, session_attributes, message):
+def elicit_slot(intent_name, slots, violated_slot, session_attributes, message):
     '''Re-prompts user to provide a slot value in the response'''
     return {
         'sessionState':{
@@ -100,44 +125,24 @@ def elicit_slot(intent_request, intent_name, slots, violated_slot, session_attri
                 'state':'InProgress'
             }
         },
-        'messages': [message] if message != None else None,
-        'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
+        'messages': [message] if message != None else None
     }
 
 
-def delegate(intent_request, session_attributes):
+def delegate(intent_name, slots, session_attributes):
     '''Directs Amazon Lex to choose the next course of action based on the bot configuration. '''
     return {
         'sessionState':{
             'sessionAttributes': session_attributes,
             'dialogAction':{
                 'type':'Delegate'
+            },
+            'intent':{
+                'name':intent_name,
+                'slots': slots
             }
-        },
-        'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
+        }
     }
-
-
-
-##Possible delegate function:
-
-# def delegate(intent_request, intent_name, slots, session_attributes):
-#     '''Directs Amazon Lex to choose the next course of action based on the bot configuration. '''
-#     return {
-#         'sessionState':{
-#             'sessionAttributes': session_attributes,
-#             'dialogAction':{
-#                 'type':'Delegate'
-#             },
-#             'intent':{
-#                 'confirmationState': 'Confirmed',
-#                 'name':intent_name,
-#                 'slots':slots,
-#                 'state':'ReadyForFulfillment'
-#             }
-#         },
-#         'requestAttributes': intent_request['requestAttributes'] if 'requestAttributes' in intent_request else None
-#     }
 
 
 ''' --- Validation Functions --- '''
@@ -170,9 +175,10 @@ def isValid_Word(word):
 
 def isValid_Pin(pin):
     
-    if pin is not None:
+    if pin:
         try:
             pin = str(pin)
+            logger.info(f'isValid PinNumber={pin}')
             if (pin.isnumeric() == 1) & (len(pin) == 4): 
                 return True
         except ValueError:
@@ -185,6 +191,7 @@ def isValid_AccountNumber(accountNumber):
     if accountNumber is not None:
         try:
             accountNumber = str(accountNumber)
+            logger.info(f'isValid AccountNumber={accountNumber}')
             if (len(accountNumber) == 12) & (accountNumber.isnumeric() == 1):
                 return True
         except ValueError:
@@ -195,48 +202,72 @@ def isValid_AccountNumber(accountNumber):
 
 def isValid_AccountType(accountType):
 
-    if accountType is not None & (accountType.lower() in ['checking', 'savings', 'checkings','saving']):
-        return True
+    account_types = ['checking', 'savings', 'checkings','saving']
+
+    return accountType.lower() in account_types
+
+
+
+def validate_balance_information(slots):
+
+    table_name = tbl_name 
+
+    #Get slots
+    accountType = try_ex(lambda: slots['accountType'])
+    accountNumber = try_ex(lambda: slots['accountNumber'])
+    pin = try_ex(lambda: slots['pin'])
+
+    logger.info(f'accountType={accountType}, accountNumber={accountNumber}, pin={pin}')
+
+
+    if accountType and not isValid_AccountType(accountType['value']['interpretedValue']):
+        return build_validation_result(
+            False,
+            'accountType',
+            'Sorry I did not understand. Would you like to get the account balance for your Checking or Savngs account?'
+        )
     
-    return False
-
-
-def validate_balance_information(accountType, accountNumber, pin):
-
-
-    if not isValid_AccountType(accountType):
-        return build_validation_result(False, 'accountType', 'Sorry I did not recognize that, please enter or say your twelve digit account number.')
-
-    if not isValid_AccountNumber(accountNumber):
-        return build_validation_result(False, 'accountNumber', 'Sorry I did not recognize that, please enter or say your twelve digit account number.')
+    if accountNumber:
+        if not isValid_AccountNumber(accountNumber['value']['interpretedValue']):
+            return build_validation_result(
+                False,
+                'accountNumber',
+                f'Sorry I did not understand. Please enter your twelve digit {accountType} account number'
+            )
+        if not validate_account_dynamodb(table_name, accountNumber['value']['interpretedValue']):
+            return build_validation_result(
+                False,
+                'accountNumber',
+                'Sorry but the account number {} does not exist in our database. Please enter your twelve digit account number.'.format(accountNumber['value']['interpretedValue'])
+            )
     
-    if not isValid_Pin(pin):
-        return build_validation_result(False, 'pin', 'Sorry I did not recognize that, please enter or say your pin number.')
+    if pin:
+        user_pin = pin['value']['interpretedValue']
+        if not isValid_Pin(user_pin):
+            return build_validation_result(
+                False,
+                'pin',
+                'Sorry I did not understand. Please enter your four digit pin number.'
+            )
+        if user_pin != get_item_dynamodb(table_name, accountNumber, 'Pin'):
+            return build_validation_result(
+                False,
+                'pin',
+                f'Sorry but the pin number {user_pin} is incorrect. Please enter your four digit pin number'
+            )
+    
+    return {'isValid':True}
 
+
+    
 """ --- Helper Functions --- """
-
-# def mapping_string_to_numeric(word):
-
-#     #Create mapping 
-#     dict_keys = [['a','b','c'], ['d','e','f'], ['g','h','i'], ['j','k','l'], ['m','n','o'],
-#     ['p','q','r','s'], ['t','u','v'], ['w','x','y','z']]
-    
-#     mapping = {}
-
-#     for keys,vals in zip(dict_keys, range(2,10)):
-#         mapping.update(dict.fromkeys(keys, str(vals)))
-
-#     res = ''
-#     for i in word:
-#         res += mapping[i.lower()]
-
-#     return res
-
 
 def get_item_dynamodb(table_name, accountNumber, query_params):
     '''retrieves element from DynamoDB'''
 
     table = dyn_resource.Table(table_name)
+    
+    if (accountNumber is None) | (query_params is None): return False
 
     try:
         response = table.get_item(Key={
@@ -267,6 +298,8 @@ def write_item_dynamodb(table_name, items):
 
 def validate_account_dynamodb(table_name, accountNumber):
     '''Checks if account number exists in DynamoDB'''
+    
+    if accountNumber is None: return False
 
     table = dyn_resource.Table(table_name)
 
@@ -300,95 +333,67 @@ def try_ex(func):
 
 """ --- Functions that control the bot's behavior --- """
 
+
 def CheckBalance(intent_request):
 
 
-    #dynamodb table name
-    table_name = 'BankAccountsNew'
+    table_name = tbl_name
 
     #Initialize required response parameters
     intent_name = intent_request['sessionState']['intent']['name']
     session_attributes = get_session_attributes(intent_request)
+    source = intent_request['invocationSource']
+    confirmation_status = intent_request['sessionState']['intent']['confirmationState']
     slots = get_slots(intent_request)
 
-    logger.info(f'slots={slots}')
-    
-    #text = 'Thank you for choosing National Bank. Please tell us for which account would you like your balance?'
-    #elicit_slot(intent_request, intent_name, slots, 'None', session_attributes, text)
-    #delegate(intent_request, session_attributes)
-    
+    logger.info(f'source={source}, slots={slots}, confirmation_status={confirmation_status}')
 
 
     #Get slot values
-    accountType = get_slot(intent_request, 'accountType')
-    accountNumber = get_slot(intent_request, 'accountNumber')
-    pin = get_slot(intent_request, 'pin')
+    accountType = slots['accountType']
+    accountNumber = slots['accountNumber']
+    pin = slots['pin']
 
     logger.info(f'accountType={accountType}, accountNumber={accountNumber}, pin={pin}')
-    
 
-    source = intent_request['invocationSource']
+
+
 
     if source == 'DialogCodeHook':
-        validation_result = validate_balance_information(accountType, accountNumber, pin)
+        # Valdiate any slots which have been specified. If any are invalid, re-elicit for their value.
+        validation_result = validate_balance_information(slots)
         logger.info(f'validation_result={validation_result}')
         if not validation_result['isValid']:
             slots[validation_result['violatedSlot']] == None
+            logger.debug(f'slots={slots}')
             logger.info('violatedSlot={}, message={}'.format(validation_result['violatedSlot'], validation_result['message']))
             return elicit_slot(
-                intent_request,
                 intent_name,
                 slots,
                 validation_result['violatedSlot'],
                 session_attributes,
                 validation_result['message']
             )
-    
-        return delegate(intent_request, session_attributes)
-        #return delegate(intent_request, intent_name, slots, session_attributes)
-
-
-    #Validation of user data with database values
-    num_to_validate = get_item_dynamodb(table_name, accountNumber, 'AccountNumber')
-    if not (accountNumber == num_to_validate):
-        logger.info(f'accountNumber input={accountNumber}, acct_num_to_validate={num_to_validate}')
-        validation_result = build_validation_result(False, 'accountNumber', f'The account number {accountNumber} does not exist in our database. Goodbye')
-        fulfillment_state = 'Failed'
-        return close(
-            intent_request,
-            session_attributes,
-            fulfillment_state,
-            validation_result['message']
-            )
-    num_to_validate = get_item_dynamodb(table_name, accountNumber, 'Pin')
-    if not (pin == num_to_validate):
-        logger.info(f'pin number input={pin}, pin_to_validate={num_to_validate}')
-        validation_result = build_validation_result(False, 'pin', f'The pin number {pin} does not exist in our database. Goodbye.')
-        fulfillment_state = 'Failed'
-        return close(
-            intent_request,
-            session_attributes,
-            fulfillment_state,
-            validation_result['message']
-            )
-
         
-
+        return delegate(intent_name,intent_request['sessionState']['intent']['slots'] ,session_attributes)
 
     
-    balance = get_item_dynamodb(table_name, accountNumber, 'Account Balance')
+    balance = get_item_dynamodb(table_name, accountNumber['value']['interpretedValue'], 'Account Balance')
     logger.info(f'balance={balance}')
 
-    output_response = f'Thank you. The balance on your {accountType} account is {balance} dollars.'
+    output1 = 'The balance on your {} account is ${:,.2f} dollars. '.format(accountType['value']['interpretedValue'],balance)
+    output2 = 'Thank you for banking with Example Bank. We appreciate your business. '
+    output3= 'Please stay on the line if you would like to take out customer experience survey.'
+    output = output1+output2+output3
     message = {
         'contentType':'PlainText',
-        'content': output_response
+        'content': output
     }
     fulfillment_state = 'Fulfilled'
     
     logger.info(f'fulfillment_state={fulfillment_state}')
-
-    return close(intent_request, session_attributes, fulfillment_state, message)
+    
+    return close(intent_name, session_attributes, fulfillment_state, message)
 
 
 def FollowupCheckBalance(intent_request):
