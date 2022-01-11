@@ -1,2 +1,1 @@
-# AWS_Lambda_Functions
-# AWS_Lambda_Functions
+The folder Bank_Contact_Flow and Bank_Contact_Flow_V2 contain the same bot information in terms of intents, slots and executed code, the only difference being is the former is for Lex Bot V1 while the latter is for Lex Bot V2.
